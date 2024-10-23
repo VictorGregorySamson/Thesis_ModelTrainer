@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.widget.TextView
 import androidx.annotation.VisibleForTesting
 import androidx.camera.core.ImageProxy
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -61,12 +62,22 @@ class HolisticLandmarkerHelper(
     private var tflite: Interpreter? = null
     private var modelPredictor: ModelPredictor? = null
 
+
     init {
         setupHolisticLandmarker()
         loadModel()
         modelPredictor = ModelPredictor(context, "fsl_model.tflite", object : ModelPredictor.PredictionListener {
             override fun onPrediction(action: String) {
-                Log.d(TAG, "Prediction: $action")
+                //Log.d(TAG, "Prediction: $action")
+
+                // Update the TextView with the predicted action
+                val mainHandler = Handler(Looper.getMainLooper())
+                mainHandler.post {
+                    val activity = context as PredictActivity
+                    val predictionTextView: TextView = activity.findViewById(R.id.predictionText)
+                    predictionTextView.text = action
+                }
+
             }
         })
     }
@@ -235,7 +246,7 @@ class HolisticLandmarkerHelper(
             postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
             if (isFrontCamera) {
                 postScale(1f, 1f, bitmapBuffer.width / 2f, bitmapBuffer.height / 2f)
-            // changing sx: -lf to sx: lf fixes the issue with right and left hand landmarks being reversed, but makes the drawing of landmarks reversed
+                // changing sx: -lf to sx: lf fixes the issue with right and left hand landmarks being reversed, but makes the drawing of landmarks reversed
             }
         }
         val rotatedBitmap = Bitmap.createBitmap(bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true)
@@ -430,15 +441,12 @@ class HolisticLandmarkerHelper(
 
 // Concatenate all three arrays
         val concatenatedLandmarks = poseLandmarks + leftHandLandmarks + rightHandLandmarks
-        
+
         landmarkBuffer.add(concatenatedLandmarks)
 
-        // Create a handler that associated with Looper of the main thread
-        val mainHandler: Handler = Handler(Looper.getMainLooper())
+        
 
         if (landmarkBuffer.size == 120) {
-            mainHandler.post {
-                val predictActivity = PredictActivity()
 
                 // Create a variable to hold all landmarks as a string
                 val allLandmarksString = StringBuilder("[")
@@ -470,33 +478,18 @@ class HolisticLandmarkerHelper(
                 } catch (e: JSONException) {
                     Log.e(TAG, "Error parsing landmarks JSON", e)
                 }
-                // Log the final string
-                //Log.d(TAG, finalString)
-                // Send the final string to PredictActivity via Intent
-                val intent = Intent(context, PredictActivity::class.java)
+
                 if (!finalString.startsWith("[") || !finalString.endsWith("]")) {
                     finalString = "[$finalString]"
                 }
 
-                val jsonArray = JSONArray(finalString)
-                Log.d(TAG, jsonArray.toString())
-                intent.putExtra("landmarks_data", jsonArray.toString())
-                //context.startActivity(intent) // Start the activity with the data
-                //predictActivity.receiveLandmarks(finalString)
+
                 landmarkBuffer.clear() // Clear buffer after sending data
-            }
+
 
         }
 
 
-// Log the concatenated array for verification
-        //Log.d(TAG, "Concatenated Landmarks: ${concatenatedLandmarks.joinToString(", ")}")
-        //val predictActivity = PredictActivity()
-
-       /* if (landmarkBuffer.size == 120) {
-            predictActivity.receiveLandmarks(landmarkBuffer)
-            landmarkBuffer.clear()
-        }*/
 
 
         holisticLandmarkerHelperListener?.onResults(
